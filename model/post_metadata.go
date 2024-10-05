@@ -19,8 +19,3 @@ type PostMetadata struct {
 	updatedAt   time.Time
 	tags        []Tag
 }
-
-type Post struct {
-	postMetadata PostMetadata
-	content      string
-}
