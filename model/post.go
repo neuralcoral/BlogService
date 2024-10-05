@@ -17,5 +17,10 @@ type PostMetadata struct {
 	status      Status
 	createdAt   time.Time
 	updatedAt   time.Time
-	tags Tag[]
+	tags        []Tag
+}
+
+type Post struct {
+	postMetadata PostMetadata
+	content      string
 }
