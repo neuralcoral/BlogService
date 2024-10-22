@@ -8,7 +8,7 @@ import (
 )
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-
+	return events.APIGatewayProxyResponse{}, nil
 }
 
 func main() {

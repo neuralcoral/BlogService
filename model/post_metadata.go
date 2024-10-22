@@ -10,12 +10,12 @@ const (
 )
 
 type PostMetadata struct {
-	id          string
-	title       string
-	bodyUrl     string
-	previewText string
-	status      Status
-	createdAt   time.Time
-	updatedAt   time.Time
-	tags        []Tag
+	ID          string
+	Title       string
+	BodyUrl     string
+	PreviewText string
+	Status      Status
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Tags        []Tag
 }
