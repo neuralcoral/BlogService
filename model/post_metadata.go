@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 type Status string
@@ -41,7 +40,7 @@ func ToDynamoDbAttributes(post *PostMetadata) map[string]types.AttributeValue {
 	}
 }
 
-func FromDynamoDBAttributeValues(ddbValues []map[string]*dynamodb.AttributeValue) []*PostMetadata {
+func FromDynamoDBAttributeValues(ddbValues []map[string]types.AttributeValue) []*PostMetadata {
 	var result []*PostMetadata
 	for _, ddbValue := range ddbValues {
 		result = append(result, FromDynamoDBAttributeValue(ddbValue))
@@ -51,24 +50,24 @@ func FromDynamoDBAttributeValues(ddbValues []map[string]*dynamodb.AttributeValue
 
 func FromDynamoDBAttributeValue(ddbValue map[string]types.AttributeValue) *PostMetadata {
 	return &PostMetadata{
-		ID:          ddbValue["ID"].,
-		Title:       *ddbValue["Title"].S,
-		BodyUrl:     *ddbValue["BodyUrl"].S,
-		PreviewText: *ddbValue["PreviewText"].S,
-		Status:      Status(*ddbValue["Status"].S),
-		CreatedAt:   parseTime(ddbValue["CreatedAt"].S),
-		UpdatedAt:   parseTime(ddbValue["UpdatedAt"].S),
+		ID:          getStringAttribute(ddbValue["ID"]),
+		Title:       getStringAttribute(ddbValue["Title"]),
+		BodyUrl:     getStringAttribute(ddbValue["BodyUrl"]),
+		PreviewText: getStringAttribute(ddbValue["PreviewText"]),
+		Status:      Status(getStringAttribute(ddbValue["Status"])),
+		CreatedAt:   parseTime(getStringAttribute(ddbValue["CreatedAt"])),
+		UpdatedAt:   parseTime(getStringAttribute(ddbValue["UpdatedAt"])),
 	}
 }
 
 func getStringAttribute(attr types.AttributeValue) string {
-	if attrS, ok := attr.(*types.AttrbuteValueMemebrS); ok {
+	if attrS, ok := attr.(*types.AttributeValueMemberS); ok {
 		return attrS.Value
 	}
 	return ""
 }
 
-func parseTime(timeStr *string) time.Time {
-	parsedTime, _ := time.Parse(time.RFC3339, *timeStr)
+func parseTime(timeStr string) time.Time {
+	parsedTime, _ := time.Parse(time.RFC3339, timeStr)
 	return parsedTime
 }

@@ -13,8 +13,8 @@ import (
 
 type DynamoDBAPI interface {
 	GetItem(context context.Context, input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)
-	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
-	Scan(input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
+	PutItem(context context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
+	Scan(context context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
 }
 
 type PostMetadataDdbDao struct {
@@ -22,14 +22,14 @@ type PostMetadataDdbDao struct {
 	tableName string
 }
 
-func (dao *PostMetadataDdbDao) GetPostMetadata(id string) (*model.PostMetadata, error) {
+func (dao *PostMetadataDdbDao) GetPostMetadata(context context.Context, id string) (*model.PostMetadata, error) {
 	ddbInput := &dynamodb.GetItemInput{
 		TableName: aws.String(dao.tableName),
 		Key: map[string]types.AttributeValue{
 			"ID": &types.AttributeValueMemberS{Value: id},
 		},
 	}
-	output, err := dao.client.GetItem(context.TODO(), ddbInput)
+	output, err := dao.client.GetItem(context, ddbInput)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (dao *PostMetadataDdbDao) GetPostMetadata(id string) (*model.PostMetadata, 
 	return result, nil
 }
 
-func (dao *PostMetadataDdbDao) UpdatePostMetadata(postMetadataToUpdate *model.PostMetadata) (*model.PostMetadata, error) {
+func (dao *PostMetadataDdbDao) UpdatePostMetadata(context context.Context, postMetadataToUpdate *model.PostMetadata) (*model.PostMetadata, error) {
 	if postMetadataToUpdate == nil {
 		return nil, nil
 	}
@@ -56,7 +56,7 @@ func (dao *PostMetadataDdbDao) UpdatePostMetadata(postMetadataToUpdate *model.Po
 		Item:      attributeValueMap,
 	}
 
-	_, err := dao.client.PutItem(ddb_input)
+	_, err := dao.client.PutItem(context, ddb_input)
 
 	if err != nil {
 		return nil, err
@@ -65,10 +65,10 @@ func (dao *PostMetadataDdbDao) UpdatePostMetadata(postMetadataToUpdate *model.Po
 	return postMetadataToUpdate, nil
 }
 
-func (dao *PostMetadataDdbDao) ListPostMetadata(limit int, lastEvaluatedKey string) ([]*model.PostMetadata, error) {
+func (dao *PostMetadataDdbDao) ListPostMetadata(context context.Context, limit int, lastEvaluatedKey string) ([]*model.PostMetadata, error) {
 	ddbInput := &dynamodb.ScanInput{
 		TableName: aws.String(dao.tableName),
-		Limit:     aws.Int64(int64(limit)),
+		Limit:     aws.Int32(int32(limit)),
 	}
 
 	if lastEvaluatedKey != "" {
@@ -77,7 +77,7 @@ func (dao *PostMetadataDdbDao) ListPostMetadata(limit int, lastEvaluatedKey stri
 		}
 
 	}
-	output, err := dao.client.Scan(ddbInput)
+	output, err := dao.client.Scan(context, ddbInput)
 	if err != nil {
 		return nil, err
 	}
