@@ -1,17 +1,20 @@
 package dao
 
 import (
+	"context"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/neuralcoral/BlogService/model"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 type DynamoDBAPI interface {
-	GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)
-	PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
-	Scan(input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
+	GetItem(context context.Context, input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)
+	PutItem(context context.Context, input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
+	Scan(context context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
 }
 
 type PostMetadataDdbDao struct {
@@ -19,16 +22,14 @@ type PostMetadataDdbDao struct {
 	tableName string
 }
 
-func (dao *PostMetadataDdbDao) GetPostMetadata(id string) (*model.PostMetadata, error) {
-	ddb_input := &dynamodb.GetItemInput{
+func (dao *PostMetadataDdbDao) GetPostMetadata(context context.Context, id string) (*model.PostMetadata, error) {
+	ddbInput := &dynamodb.GetItemInput{
 		TableName: aws.String(dao.tableName),
-		Key: map[string]*dynamodb.AttributeValue{
-			"ID": {
-				S: aws.String(id),
-			},
+		Key: map[string]types.AttributeValue{
+			"ID": &types.AttributeValueMemberS{Value: id},
 		},
 	}
-	output, err := dao.client.GetItem(ddb_input)
+	output, err := dao.client.GetItem(context, ddbInput)
 	if err != nil {
 		return nil, err
 	}
@@ -37,32 +38,25 @@ func (dao *PostMetadataDdbDao) GetPostMetadata(id string) (*model.PostMetadata, 
 		return nil, nil
 	}
 
-	result := &model.PostMetadata{
-		ID:          id,
-		Title:       *output.Item["Title"].S,
-		BodyUrl:     *output.Item["BodyUrl"].S,
-		PreviewText: *output.Item["PreviewText"].S,
-		Status:      model.Status(*output.Item["Status"].S),
-		CreatedAt:   parseTime(output.Item["CreatedAt"].S),
-		UpdatedAt:   parseTime(output.Item["UpdatedAt"].S),
-	}
+	result := model.FromDynamoDBAttributeValue(output.Item)
 
 	return result, nil
 }
 
-func (dao *PostMetadataDdbDao) UpdatePostMetadata(postMetadataToUpdate *model.PostMetadata) (*model.PostMetadata, error) {
+func (dao *PostMetadataDdbDao) UpdatePostMetadata(context context.Context, postMetadataToUpdate *model.PostMetadata) (*model.PostMetadata, error) {
 	if postMetadataToUpdate == nil {
 		return nil, nil
 	}
 	postMetadataToUpdate.UpdatedAt = time.Now().Truncate(time.Second)
 
-	attributeValueMap := convertPostMetadataToDynamoDBAttributes(postMetadataToUpdate)
+	attributeValueMap := model.ToDynamoDbAttributes(postMetadataToUpdate)
 
-	ddb_input := &dynamodb.PutItemInput{
-		TableName: aws.String(dao.tableName), Item: attributeValueMap,
+	ddbInput := &dynamodb.PutItemInput{
+		TableName: aws.String(dao.tableName),
+		Item:      attributeValueMap,
 	}
 
-	_, err := dao.client.PutItem(ddb_input)
+	_, err := dao.client.PutItem(context, ddbInput)
 
 	if err != nil {
 		return nil, err
@@ -71,32 +65,27 @@ func (dao *PostMetadataDdbDao) UpdatePostMetadata(postMetadataToUpdate *model.Po
 	return postMetadataToUpdate, nil
 }
 
-func (dao *PostMetadataDdbDao) ListPostMetadata(limit int, lastEvaluatedKey string) ([]*model.PostMetadata, error) {
-	return nil, nil
+func (dao *PostMetadataDdbDao) ListPostMetadata(context context.Context, limit int, lastEvaluatedKey string) ([]*model.PostMetadata, error) {
+	ddbInput := &dynamodb.ScanInput{
+		TableName: aws.String(dao.tableName),
+		Limit:     aws.Int32(int32(limit)),
+	}
+
+	if lastEvaluatedKey != "" {
+		ddbInput.ExclusiveStartKey = map[string]types.AttributeValue{
+			"PrimaryKeyAttribute": &types.AttributeValueMemberS{Value: lastEvaluatedKey},
+		}
+
+	}
+	output, err := dao.client.Scan(context, ddbInput)
+	if err != nil {
+		return nil, err
+	}
+
+	result := model.FromDynamoDBAttributeValues(output.Items)
+	return result, nil
 }
 
 func (dao *PostMetadataDdbDao) CreatePostMetadata(postMetadataToCreate *model.PostMetadata) error {
 	return nil
-}
-
-func convertPostMetadataToDynamoDBAttributes(post *model.PostMetadata) map[string]*dynamodb.AttributeValue {
-	if post == nil {
-		return nil
-	}
-
-	return map[string]*dynamodb.AttributeValue{
-		"ID":          {S: aws.String(post.ID)},
-		"Title":       {S: aws.String(post.Title)},
-		"BodyUrl":     {S: aws.String(post.BodyUrl)},
-		"PreviewText": {S: aws.String(post.PreviewText)},
-		"Status":      {S: aws.String(string(post.Status))},
-		"CreatedAt":   {S: aws.String(post.CreatedAt.Format(time.RFC3339))},
-		"UpdatedAt":   {S: aws.String(post.UpdatedAt.Format(time.RFC3339))},
-	}
-
-}
-
-func parseTime(timeStr *string) time.Time {
-	parsedTime, _ := time.Parse(time.RFC3339, *timeStr)
-	return parsedTime
 }
