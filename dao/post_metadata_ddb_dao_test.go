@@ -203,7 +203,80 @@ func TestUpdatePostMetadata_EmptyInput_ReturnsEmpty(t *testing.T) {
 }
 
 func TestListPostMetadata_Success(t *testing.T) {
+	ID1 := "123"
+	ID2 := "456"
+	Title1 := "Title1 Post"
+	Title2 := "Title2 Post"
+	BodyUrl1 := "http://example.com/bodyText/1"
+	BodyUrl2 := "http://example.com/bodyText/2"
+	PreviewText1 := "This is a preview1"
+	PreviewText2 := "This is a preview2"
+	Status := model.Draft
+	CreatedAt := time.Now().Format(time.RFC3339)
+	UpdatedAt := time.Now().Format(time.RFC3339)
 
+	scanFunc := func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+		items := []map[string]types.AttributeValue{}
+		items = append(items, map[string]types.AttributeValue{
+			"ID":          &types.AttributeValueMemberS{Value: ID1},
+			"Title":       &types.AttributeValueMemberS{Value: Title1},
+			"BodyUrl":     &types.AttributeValueMemberS{Value: BodyUrl1},
+			"PreviewText": &types.AttributeValueMemberS{Value: PreviewText1},
+			"Status":      &types.AttributeValueMemberS{Value: string(Status)},
+			"CreatedAt":   &types.AttributeValueMemberS{Value: CreatedAt},
+			"UpdatedAt":   &types.AttributeValueMemberS{Value: UpdatedAt},
+		})
+		items = append(items, map[string]types.AttributeValue{
+			"ID":          &types.AttributeValueMemberS{Value: ID2},
+			"Title":       &types.AttributeValueMemberS{Value: Title2},
+			"BodyUrl":     &types.AttributeValueMemberS{Value: BodyUrl2},
+			"PreviewText": &types.AttributeValueMemberS{Value: PreviewText2},
+			"Status":      &types.AttributeValueMemberS{Value: string(Status)},
+			"CreatedAt":   &types.AttributeValueMemberS{Value: CreatedAt},
+			"UpdatedAt":   &types.AttributeValueMemberS{Value: UpdatedAt},
+		})
+
+		consumedCapacity := &types.ConsumedCapacity{}
+		lastEvaluatedKey := map[string]types.AttributeValue{}
+		return &dynamodb.ScanOutput{
+			ConsumedCapacity: consumedCapacity,
+			Count:            int32(len(items)),
+			Items:            items,
+			LastEvaluatedKey: lastEvaluatedKey,
+			ScannedCount:     5,
+		}, nil
+	}
+	sut := setupMockDynamoDBForScan(t, scanFunc)
+
+	parsedCreatedAt, _ := time.Parse(time.RFC3339, CreatedAt)
+	parsedUpdatedAt, _ := time.Parse(time.RFC3339, UpdatedAt)
+	var expectedResult []*model.PostMetadata
+	expectedResult = append(expectedResult, &model.PostMetadata{
+		ID:          ID1,
+		Title:       Title1,
+		BodyUrl:     BodyUrl1,
+		PreviewText: PreviewText1,
+		Status:      Status,
+		CreatedAt:   parsedCreatedAt,
+		UpdatedAt:   parsedUpdatedAt,
+	})
+	expectedResult = append(expectedResult, &model.PostMetadata{
+		ID:          ID2,
+		Title:       Title2,
+		BodyUrl:     BodyUrl2,
+		PreviewText: PreviewText2,
+		Status:      Status,
+		CreatedAt:   parsedCreatedAt,
+		UpdatedAt:   parsedUpdatedAt,
+	})
+
+	result, err := sut.ListPostMetadata(context.Background(), 2, "")
+
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	assert.Equal(t, expectedResult, result)
 }
 
 func setupMockDynamoDBForGet(t testing.TB, getItemFunc func(context.Context, *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)) PostMetadataDdbDao {
@@ -229,5 +302,16 @@ func setupMockDynamoDBForPut(t testing.TB, putItemFunc func(context.Context, *dy
 		client: mockDynamoDBClient,
 	}
 
+	return sut
+}
+
+func setupMockDynamoDBForScan(t testing.TB, scanFunc func(context.Context, *dynamodb.ScanInput) (*dynamodb.ScanOutput, error)) PostMetadataDdbDao {
+	t.Helper()
+	MockDynamoDBClient := &MockDynamoDBClient{
+		ScanFunc: scanFunc,
+	}
+	sut := PostMetadataDdbDao{
+		client: MockDynamoDBClient,
+	}
 	return sut
 }

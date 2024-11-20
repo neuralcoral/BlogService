@@ -51,12 +51,12 @@ func (dao *PostMetadataDdbDao) UpdatePostMetadata(context context.Context, postM
 
 	attributeValueMap := model.ToDynamoDbAttributes(postMetadataToUpdate)
 
-	ddb_input := &dynamodb.PutItemInput{
+	ddbInput := &dynamodb.PutItemInput{
 		TableName: aws.String(dao.tableName),
 		Item:      attributeValueMap,
 	}
 
-	_, err := dao.client.PutItem(context, ddb_input)
+	_, err := dao.client.PutItem(context, ddbInput)
 
 	if err != nil {
 		return nil, err
