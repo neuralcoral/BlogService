@@ -279,6 +279,89 @@ func TestListPostMetadata_Success(t *testing.T) {
 	assert.Equal(t, expectedResult, result)
 }
 
+func TestListPostMetadata_Succeeds_WithLastEvaluatedKey(t *testing.T) {
+	ID1 := "123"
+	ID2 := "456"
+	Title2 := "Title2 Post"
+	BodyUrl2 := "http://example.com/bodyText/2"
+	PreviewText2 := "This is a preview2"
+	Status := model.Draft
+	CreatedAt := time.Now().Format(time.RFC3339)
+	UpdatedAt := time.Now().Format(time.RFC3339)
+
+	scanFunc2 := func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+		items := []map[string]types.AttributeValue{}
+		items = append(items, map[string]types.AttributeValue{
+			"ID":          &types.AttributeValueMemberS{Value: ID2},
+			"Title":       &types.AttributeValueMemberS{Value: Title2},
+			"BodyUrl":     &types.AttributeValueMemberS{Value: BodyUrl2},
+			"PreviewText": &types.AttributeValueMemberS{Value: PreviewText2},
+			"Status":      &types.AttributeValueMemberS{Value: string(Status)},
+			"CreatedAt":   &types.AttributeValueMemberS{Value: CreatedAt},
+			"UpdatedAt":   &types.AttributeValueMemberS{Value: UpdatedAt},
+		})
+		consumedCapacity := &types.ConsumedCapacity{}
+		lastEvaluatedKey := map[string]types.AttributeValue{}
+		return &dynamodb.ScanOutput{
+			ConsumedCapacity: consumedCapacity,
+			Count:            int32(len(items)),
+			Items:            items,
+			LastEvaluatedKey: lastEvaluatedKey,
+			ScannedCount:     5,
+		}, nil
+	}
+
+	scanFunc := func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+		if key, ok := input.ExclusiveStartKey["PrimaryKeyAttribute"]; ok {
+			if id, ok := key.(*types.AttributeValueMemberS); ok {
+				input.ExclusiveStartKey["PrimaryKeyAttribute"] = id
+				return scanFunc2(ctx, input)
+			}
+		}
+		return nil, errors.New("unexpected error")
+	}
+
+	sut := setupMockDynamoDBForScan(t, scanFunc)
+
+	parsedCreatedAt, _ := time.Parse(time.RFC3339, CreatedAt)
+	parsedUpdatedAt, _ := time.Parse(time.RFC3339, UpdatedAt)
+	var expectedResult []*model.PostMetadata
+	expectedResult = append(expectedResult, &model.PostMetadata{
+		ID:          ID2,
+		Title:       Title2,
+		BodyUrl:     BodyUrl2,
+		PreviewText: PreviewText2,
+		Status:      Status,
+		CreatedAt:   parsedCreatedAt,
+		UpdatedAt:   parsedUpdatedAt,
+	})
+
+	result, err := sut.ListPostMetadata(context.Background(), 1, ID1)
+
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	assert.Equal(t, expectedResult, result)
+}
+
+func TestListPostMetadata_DynamoDBFailure_ReturnsErr(t *testing.T) {
+	expectedErr := errors.New("mock error for testing")
+	scanFunc := func(ctx context.Context, input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+		return nil, errors.New("mock error for testing")
+	}
+	sut := setupMockDynamoDBForScan(t, scanFunc)
+
+	result, err := sut.ListPostMetadata(context.Background(), 2, "")
+
+	if result != nil {
+		t.Fatalf("unexpected result: %v", result)
+	}
+
+	assert.Equal(t, expectedErr, err)
+
+}
+
 func setupMockDynamoDBForGet(t testing.TB, getItemFunc func(context.Context, *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error)) PostMetadataDdbDao {
 	t.Helper()
 	mockDynamoDBClient := &MockDynamoDBClient{
